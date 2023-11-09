@@ -1,0 +1,75 @@
+nama : shindy ainun nabilla
+
+-- Create dimension tables
+CREATE TABLE dim_user (
+  user_id SERIAL PRIMARY KEY,
+  user_name VARCHAR(100),
+  country VARCHAR(50)
+);
+
+CREATE TABLE dim_post (
+  post_id SERIAL PRIMARY KEY,
+  post_text VARCHAR(500),
+  post_date DATE,
+  user_id INT REFERENCES dim_user(user_id)
+);
+
+CREATE TABLE dim_date (
+  date_id SERIAL PRIMARY KEY,
+  date_value DATE
+);
+
+-- Populate dim_user from raw_users
+INSERT INTO dim_user (user_id, user_name, country)
+SELECT DISTINCT user_id, user_name, country
+FROM raw_users;
+
+-- Populate dim_post from raw_posts
+INSERT INTO dim_post (post_id, post_text, post_date, user_id)
+SELECT DISTINCT post_id, post_text, post_date, user_id
+FROM raw_posts;
+
+-- Populate dim_date from raw_posts and raw_likes
+INSERT INTO dim_date (date_value)
+SELECT DISTINCT post_date FROM raw_posts
+UNION
+SELECT DISTINCT like_date FROM raw_likes;
+3. Create a fact table called fact_post_performance:
+
+
+-- Create fact table
+CREATE TABLE fact_post_performance (
+  fact_id SERIAL PRIMARY KEY,
+  post_id INT REFERENCES dim_post(post_id),
+  date_id INT REFERENCES dim_date(date_id),
+  views_count INT,
+  likes_count INT
+);
+
+-- Populate fact_post_performance
+INSERT INTO fact_post_performance (post_id, date_id, views_count, likes_count)
+SELECT p.post_id, d.date_id, COUNT(DISTINCT v.user_id) AS views_count, COUNT(l.like_id) AS likes_count
+FROM dim_post p
+JOIN dim_date d ON p.post_date = d.date_value
+LEFT JOIN raw_likes l ON p.post_id = l.post_id AND d.date_value = l.like_date
+LEFT JOIN raw_posts v ON p.post_id = v.post_id AND d.date_value = v.post_date
+GROUP BY p.post_id, d.date_id;
+
+-- Create fact_daily_posts
+CREATE TABLE fact_daily_posts (
+  fact_id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES dim_user(user_id),
+  date_id INT REFERENCES dim_date(date_id),
+  posts_count INT
+);
+
+-- Populate fact_daily_posts
+INSERT INTO fact_daily_posts (user_id, date_id, posts_count)
+SELECT user_id, date_id, COUNT(post_id) AS posts_count
+FROM dim_post
+GROUP BY user_id, date_id;
+
+
+
+
+
